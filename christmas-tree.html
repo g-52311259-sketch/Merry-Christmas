@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Jenni Interactive Christmas Tree</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+  <style>
+    body { margin: 0; background: #000502; overflow: hidden; }
+    .text-gold-gradient {
+      color: #ffd700;
+      text-shadow: 0 0 30px rgba(255, 215, 0, 0.8), 0 0 60px rgba(255, 215, 0, 0.5), 0 0 80px rgba(255, 215, 0, 0.3);
+    }
+    .font-cinematic { font-family: 'Cinzel', serif; }
+    .font-elegant { font-family: 'Playfair Display', serif; }
+    #canvas-container { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 0; }
+    #ui-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 10; pointer-events: none; }
+    .greeting { opacity: 0; transform: scale(0.8) translateY(20px); transition: all 1.2s ease-out; }
+    .greeting.show { opacity: 1; transform: scale(1) translateY(0); }
+    .subtitle { opacity: 0; transition: opacity 1s ease-out 0.8s; }
+    .greeting.show .subtitle { opacity: 1; }
+    .emerald-glow {
+      color: #7fffd4;
+      text-shadow: 0 0 20px rgba(80, 200, 120, 1), 0 0 40px rgba(80, 200, 120, 0.7);
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+  
+  <div id="ui-overlay" class="flex flex-col items-center justify-between p-8">
+    <header class="w-full flex justify-between items-start">
+      <div class="text-white/50 text-xs tracking-[0.3em] font-cinematic uppercase">Jenni Collection</div>
+    </header>
+
+    <div class="flex-1 flex items-center justify-center">
+      <div id="greeting" class="greeting text-center">
+        <h1 class="text-6xl md:text-8xl lg:text-9xl font-elegant text-gold-gradient leading-tight">
+          Merry <br/> Christmas
+        </h1>
+        <p class="subtitle mt-6 emerald-glow font-cinematic tracking-[0.4em] text-sm md:text-lg uppercase">
+          MAY YOUR DREAM COME TRUE
+        </p>
+      </div>
+    </div>
+
+    <div class="pointer-events-auto mb-8 flex items-end justify-center gap-8">
+      <!-- Center buttons -->
+      <div class="flex flex-col items-center gap-4">
+        <button id="music-btn" class="group relative px-6 py-3 border border-white/20 bg-black/40 backdrop-blur-md rounded-full overflow-hidden transition-all duration-500 hover:scale-105 active:scale-95">
+          <div class="flex items-center gap-2 relative z-10">
+            <svg id="music-icon" class="w-4 h-4 text-white/70" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+            </svg>
+            <span id="music-text" class="text-white/70 font-cinematic tracking-widest text-xs">PLAY MUSIC</span>
+          </div>
+        </button>
+        
+        <button id="toggle-btn" class="group relative px-8 py-4 border border-emerald-500/30 bg-black/40 backdrop-blur-md rounded-full overflow-hidden transition-all duration-500 shadow-[0_0_20px_-5px_rgba(16,185,129,0.3)] hover:scale-105 active:scale-95">
+          <div class="absolute inset-0 bg-gradient-to-r from-emerald-900/0 via-emerald-500/10 to-emerald-900/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+          <div class="flex items-center gap-3 relative z-10">
+            <svg id="btn-icon" class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"></path>
+            </svg>
+            <span id="btn-text" class="text-emerald-100 font-cinematic tracking-widest text-sm">ASSEMBLE TREE</span>
+          </div>
+        </button>
+      </div>
+    </div>
+    
+    <!-- Particle Slider - Fixed left side -->
+    <div class="pointer-events-auto fixed left-6 bottom-8 flex flex-col items-center gap-2 px-3 py-3 bg-black/40 backdrop-blur-md rounded-2xl border border-white/20">
+      <span class="text-white/70 font-cinematic tracking-widest text-[10px]">PARTICLES</span>
+      <input id="particle-slider" type="range" min="200" max="5000" value="2500" step="100" class="accent-emerald-400 cursor-pointer" style="writing-mode: vertical-lr; direction: rtl; height: 80px; width: 6px;">
+      <span id="particle-count" class="text-emerald-400 font-cinematic text-xs">2500</span>
+    </div>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+    import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+    import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+    // State
+    let isTreeShape = false;
+    let blendValue = 0;
+
+    // Scene setup
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#000502');
+
+    const camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 0, 22);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.5;
+    document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+    // Post-processing - stronger bloom
+    const composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 2.0, 0.5, 0.3);
+    composer.addPass(bloomPass);
+
+    // Controls
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enablePan = false;
+    controls.maxPolarAngle = Math.PI / 1.5;
+    controls.minPolarAngle = Math.PI / 3;
+    controls.maxDistance = 25;
+    controls.minDistance = 8;
+
+    // Lighting - brighter
+    scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+    const spotLight = new THREE.SpotLight(0xFFD700, 15);
+    spotLight.position.set(10, 10, 10);
+    scene.add(spotLight);
+    const pointLight = new THREE.PointLight(0x50C878, 8);
+    pointLight.position.set(-10, -10, -10);
+    scene.add(pointLight);
+    const pointLight2 = new THREE.PointLight(0xFFD700, 5);
+    pointLight2.position.set(0, 5, 5);
+    scene.add(pointLight2);
+
+    // Main group
+    const mainGroup = new THREE.Group();
+    scene.add(mainGroup);
+
+    // Colors
+    const COLORS = ['#50C878', '#2E8B57', '#85FFBD', '#FFD700', '#FDB931', '#FFFACD'];
+
+    // Particles - make dynamic
+    let COUNT = 2500;
+    const MAX_COUNT = 5000;
+    const TREE_HEIGHT = 10;
+    const TREE_RADIUS = 4;
+
+    const geometry = new THREE.DodecahedronGeometry(0.2, 0);
+    let particleData = [];
+    const dummy = new THREE.Object3D();
+
+    function generateParticleData(count) {
+      const data = [];
+      for (let i = 0; i < count; i++) {
+        const rScatter = 15 * Math.cbrt(Math.random());
+        const thetaScatter = Math.random() * 2 * Math.PI;
+        const phiScatter = Math.acos(2 * Math.random() - 1);
+        const xS = rScatter * Math.sin(phiScatter) * Math.cos(thetaScatter);
+        const yS = rScatter * Math.sin(phiScatter) * Math.sin(thetaScatter);
+        const zS = rScatter * Math.cos(phiScatter);
+
+        const hNorm = Math.random();
+        const yT = (hNorm * TREE_HEIGHT) - (TREE_HEIGHT / 2);
+        const rT = (1 - hNorm) * TREE_RADIUS;
+        const spiralAngle = hNorm * 15 * Math.PI + (Math.random() * Math.PI * 2);
+        const rFinal = rT * (0.8 + Math.random() * 0.4);
+        const xT = rFinal * Math.cos(spiralAngle);
+        const zT = rFinal * Math.sin(spiralAngle);
+
+        const isGold = Math.random() > 0.7;
+        const colorHex = isGold ? COLORS[3 + Math.floor(Math.random() * 3)] : COLORS[Math.floor(Math.random() * 3)];
+        const scale = (Math.random() * 0.4 + 0.1) * (isGold ? 1.8 : 1);
+
+        data.push({
+          scatterPos: new THREE.Vector3(xS, yS, zS),
+          treePos: new THREE.Vector3(xT, yT, zT),
+          scale,
+          speed: 0.5 + Math.random(),
+          phase: Math.random() * Math.PI * 2,
+          color: colorHex,
+          isGold
+        });
+      }
+      return data;
+    }
+
+    // Initialize particle data for max count
+    particleData = generateParticleData(MAX_COUNT);
+
+    // Use InstancedMesh with max count
+    const instancedGeometry = new THREE.DodecahedronGeometry(0.2, 0);
+    const instancedMaterial = new THREE.MeshStandardMaterial({
+      vertexColors: false,
+      roughness: 0.2,
+      metalness: 0.8
+    });
+
+    const particles = new THREE.InstancedMesh(instancedGeometry, instancedMaterial, MAX_COUNT);
+    
+    // Set instance colors for all
+    for (let i = 0; i < MAX_COUNT; i++) {
+      const p = particleData[i];
+      const color = new THREE.Color(p.color);
+      if (p.isGold) {
+        color.multiplyScalar(2.5);
+      } else {
+        color.multiplyScalar(1.8);
+      }
+      particles.setColorAt(i, color);
+      
+      dummy.position.copy(p.scatterPos);
+      dummy.scale.setScalar(p.scale);
+      dummy.updateMatrix();
+      particles.setMatrixAt(i, dummy.matrix);
+    }
+    
+    particles.instanceColor.needsUpdate = true;
+    particles.instanceMatrix.needsUpdate = true;
+    particles.count = COUNT; // Only render COUNT particles
+    mainGroup.add(particles);
+
+    // Star - smaller size
+    const starGroup = new THREE.Group();
+    starGroup.position.set(0, 5.1, 0);
+    starGroup.scale.setScalar(0);
+
+    const starGeom = new THREE.OctahedronGeometry(0.3, 0);
+    const starMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color('#FFD700').multiplyScalar(3)
+    });
+    const star = new THREE.Mesh(starGeom, starMat);
+    starGroup.add(star);
+
+    // Star glow sphere
+    const glowGeom = new THREE.SphereGeometry(0.45, 16, 16);
+    const glowMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color('#FFD700').multiplyScalar(2),
+      transparent: true,
+      opacity: 0.4
+    });
+    const glow = new THREE.Mesh(glowGeom, glowMat);
+    starGroup.add(glow);
+
+    const haloGeom = new THREE.TorusGeometry(0.5, 0.02, 16, 100);
+    const haloMat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#FFD700').multiplyScalar(2), transparent: true, opacity: 0.6 });
+    const halo = new THREE.Mesh(haloGeom, haloMat);
+    halo.rotation.x = Math.PI / 2;
+    starGroup.add(halo);
+    mainGroup.add(starGroup);
+
+    // Snow - create snowflake texture
+    const SNOW_COUNT = 600;
+    
+    // Create snowflake texture using canvas
+    const snowCanvas = document.createElement('canvas');
+    snowCanvas.width = 64;
+    snowCanvas.height = 64;
+    const ctx = snowCanvas.getContext('2d');
+    
+    // Clear and draw snowflake
+    ctx.fillStyle = 'transparent';
+    ctx.fillRect(0, 0, 64, 64);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.translate(32, 32);
+    
+    // Draw 6-pointed snowflake
+    for (let i = 0; i < 6; i++) {
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(0, -24);
+      // Branches
+      ctx.moveTo(0, -18);
+      ctx.lineTo(6, -24);
+      ctx.moveTo(0, -18);
+      ctx.lineTo(-6, -24);
+      ctx.moveTo(0, -10);
+      ctx.lineTo(8, -16);
+      ctx.moveTo(0, -10);
+      ctx.lineTo(-8, -16);
+      ctx.stroke();
+      ctx.rotate(Math.PI / 3);
+    }
+    
+    const snowTexture = new THREE.CanvasTexture(snowCanvas);
+    
+    const snowGeom = new THREE.PlaneGeometry(1, 1);
+    const snowMat = new THREE.MeshBasicMaterial({ 
+      map: snowTexture,
+      color: 0xffffff,
+      transparent: true, 
+      opacity: 0.9, 
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    const snow = new THREE.InstancedMesh(snowGeom, snowMat, SNOW_COUNT);
+    const snowData = [];
+
+    for (let i = 0; i < SNOW_COUNT; i++) {
+      const x = (Math.random() - 0.5) * 50;
+      const y = (Math.random() - 0.5) * 40;
+      const z = (Math.random() - 0.5) * 50;
+      const scale = 0.3 + Math.random() * 0.4;
+      snowData.push({
+        x, y, z,
+        scale,
+        speed: 0.03 + Math.random() * 0.06,
+        t: Math.random() * 100,
+        rotSpeed: (Math.random() - 0.5) * 2,
+        rotation: Math.random() * Math.PI * 2
+      });
+      dummy.position.set(x, y, z);
+      dummy.scale.setScalar(scale);
+      dummy.updateMatrix();
+      snow.setMatrixAt(i, dummy.matrix);
+    }
+    snow.instanceMatrix.needsUpdate = true;
+    scene.add(snow);
+
+    // Sparkles - brighter
+    const sparkleGeom = new THREE.BufferGeometry();
+    const sparkleCount = 150;
+    const sparklePositions = new Float32Array(sparkleCount * 3);
+    for (let i = 0; i < sparkleCount; i++) {
+      sparklePositions[i * 3] = (Math.random() - 0.5) * 15;
+      sparklePositions[i * 3 + 1] = (Math.random() - 0.5) * 15;
+      sparklePositions[i * 3 + 2] = (Math.random() - 0.5) * 15;
+    }
+    sparkleGeom.setAttribute('position', new THREE.BufferAttribute(sparklePositions, 3));
+    const sparkleMat = new THREE.PointsMaterial({ 
+      color: new THREE.Color('#FFD700').multiplyScalar(3), 
+      size: 0.25, 
+      transparent: true, 
+      opacity: 0.8 
+    });
+    const sparkles = new THREE.Points(sparkleGeom, sparkleMat);
+    mainGroup.add(sparkles);
+
+    // Ground snow - white snowy ground
+    const groundGeom = new THREE.CircleGeometry(15, 64);
+    const groundMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      roughness: 0.8,
+      metalness: 0.1
+    });
+    const ground = new THREE.Mesh(groundGeom, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -5.2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    // Snow bumps on ground for texture
+    const bumpCount = 300;
+    const bumpGeom = new THREE.SphereGeometry(0.1, 6, 6);
+    const bumpMat = new THREE.MeshStandardMaterial({ color: 0xf8f8ff, roughness: 0.9 });
+    const bumps = new THREE.InstancedMesh(bumpGeom, bumpMat, bumpCount);
+    for (let i = 0; i < bumpCount; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 1 + Math.random() * 13;
+      dummy.position.set(
+        Math.cos(angle) * radius,
+        -5.15 + Math.random() * 0.1,
+        Math.sin(angle) * radius
+      );
+      dummy.scale.setScalar(0.3 + Math.random() * 2);
+      dummy.updateMatrix();
+      bumps.setMatrixAt(i, dummy.matrix);
+    }
+    bumps.instanceMatrix.needsUpdate = true;
+    scene.add(bumps);
+
+    // Gift boxes around tree
+    const giftColors = [
+      { box: 0xff0000, ribbon: 0xffd700 },
+      { box: 0x00aa00, ribbon: 0xff0000 },
+      { box: 0x0066cc, ribbon: 0xffffff },
+      { box: 0x9932cc, ribbon: 0xffd700 },
+      { box: 0xffd700, ribbon: 0xff0000 },
+      { box: 0xff69b4, ribbon: 0xffffff },
+      { box: 0x00ced1, ribbon: 0xffd700 },
+      { box: 0xff4500, ribbon: 0x00ff00 },
+    ];
+
+    const giftsGroup = new THREE.Group();
+    const giftCount = 50;
+    const giftData = [];
+
+    for (let i = 0; i < giftCount; i++) {
+      const giftGroup = new THREE.Group();
+      
+      const w = 0.4 + Math.random() * 0.6;
+      const h = 0.3 + Math.random() * 0.5;
+      const d = 0.4 + Math.random() * 0.6;
+      
+      const colorSet = giftColors[Math.floor(Math.random() * giftColors.length)];
+      
+      // Box
+      const boxGeom = new THREE.BoxGeometry(w, h, d);
+      const boxMat = new THREE.MeshStandardMaterial({ 
+        color: colorSet.box, 
+        roughness: 0.3,
+        metalness: 0.3
+      });
+      const box = new THREE.Mesh(boxGeom, boxMat);
+      giftGroup.add(box);
+      
+      // Ribbon cross
+      const ribbonMat = new THREE.MeshStandardMaterial({ 
+        color: colorSet.ribbon, 
+        roughness: 0.2, 
+        metalness: 0.6 
+      });
+      
+      const ribbonH = new THREE.Mesh(
+        new THREE.BoxGeometry(w + 0.02, 0.06, d + 0.02),
+        ribbonMat
+      );
+      ribbonH.position.y = h * 0.35;
+      giftGroup.add(ribbonH);
+      
+      const ribbonV = new THREE.Mesh(
+        new THREE.BoxGeometry(0.06, h + 0.02, d + 0.02),
+        ribbonMat
+      );
+      giftGroup.add(ribbonV);
+      
+      // Bow on top
+      const bowGeom = new THREE.TorusGeometry(0.08, 0.025, 8, 12);
+      const bow1 = new THREE.Mesh(bowGeom, ribbonMat);
+      bow1.position.set(-0.06, h/2 + 0.08, 0);
+      bow1.rotation.y = Math.PI / 2;
+      giftGroup.add(bow1);
+      
+      const bow2 = new THREE.Mesh(bowGeom, ribbonMat);
+      bow2.position.set(0.06, h/2 + 0.08, 0);
+      bow2.rotation.y = Math.PI / 2;
+      giftGroup.add(bow2);
+      
+      // Tree position (around tree on ground)
+      const angle = (i / giftCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+      const radius = 2.8 + Math.random() * 2.5;
+      const treePos = new THREE.Vector3(
+        Math.cos(angle) * radius,
+        -5 + h/2,
+        Math.sin(angle) * radius
+      );
+      
+      // Scatter position (floating in air)
+      const scatterPos = new THREE.Vector3(
+        (Math.random() - 0.5) * 20,
+        (Math.random() - 0.5) * 15,
+        (Math.random() - 0.5) * 20
+      );
+      
+      // Start at scatter position
+      giftGroup.position.copy(scatterPos);
+      giftGroup.rotation.y = Math.random() * Math.PI * 2;
+      
+      giftData.push({
+        group: giftGroup,
+        treePos,
+        scatterPos,
+        targetRotY: Math.random() * Math.PI * 2,
+        speed: 0.3 + Math.random() * 0.5,
+        phase: Math.random() * Math.PI * 2
+      });
+      
+      giftsGroup.add(giftGroup);
+    }
+    scene.add(giftsGroup);
+
+    // Santa's sleigh with reindeer
+    const sleighGroup = new THREE.Group();
+    
+    // Sleigh body
+    const sleighBody = new THREE.Group();
+    
+    // Main sleigh base
+    const sleighBaseGeom = new THREE.BoxGeometry(1.2, 0.3, 0.6);
+    const sleighMat = new THREE.MeshStandardMaterial({ color: 0x8B0000, roughness: 0.3, metalness: 0.2 });
+    const sleighBase = new THREE.Mesh(sleighBaseGeom, sleighMat);
+    sleighBody.add(sleighBase);
+    
+    // Sleigh back
+    const sleighBackGeom = new THREE.BoxGeometry(0.1, 0.6, 0.6);
+    const sleighBack = new THREE.Mesh(sleighBackGeom, sleighMat);
+    sleighBack.position.set(-0.55, 0.3, 0);
+    sleighBody.add(sleighBack);
+    
+    // Sleigh runners (gold)
+    const runnerMat = new THREE.MeshStandardMaterial({ color: 0xFFD700, roughness: 0.2, metalness: 0.8 });
+    const runnerGeom = new THREE.BoxGeometry(1.4, 0.05, 0.05);
+    const runner1 = new THREE.Mesh(runnerGeom, runnerMat);
+    runner1.position.set(0, -0.2, 0.25);
+    sleighBody.add(runner1);
+    const runner2 = new THREE.Mesh(runnerGeom, runnerMat);
+    runner2.position.set(0, -0.2, -0.25);
+    sleighBody.add(runner2);
+    
+    // Santa (simplified)
+    const santaGroup = new THREE.Group();
+    
+    // Santa body (red)
+    const santaBodyGeom = new THREE.CapsuleGeometry(0.2, 0.3, 4, 8);
+    const santaBodyMat = new THREE.MeshStandardMaterial({ color: 0xff0000, roughness: 0.5 });
+    const santaBody = new THREE.Mesh(santaBodyGeom, santaBodyMat);
+    santaBody.position.y = 0.4;
+    santaGroup.add(santaBody);
+    
+    // Santa head
+    const santaHeadGeom = new THREE.SphereGeometry(0.12, 8, 8);
+    const santaHeadMat = new THREE.MeshStandardMaterial({ color: 0xffdbac, roughness: 0.6 });
+    const santaHead = new THREE.Mesh(santaHeadGeom, santaHeadMat);
+    santaHead.position.y = 0.7;
+    santaGroup.add(santaHead);
+    
+    // Santa hat
+    const hatGeom = new THREE.ConeGeometry(0.1, 0.2, 8);
+    const hatMat = new THREE.MeshStandardMaterial({ color: 0xff0000, roughness: 0.5 });
+    const hat = new THREE.Mesh(hatGeom, hatMat);
+    hat.position.set(0, 0.85, 0);
+    hat.rotation.z = 0.2;
+    santaGroup.add(hat);
+    
+    // Hat pom pom
+    const pomGeom = new THREE.SphereGeometry(0.04, 6, 6);
+    const pomMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 });
+    const pom = new THREE.Mesh(pomGeom, pomMat);
+    pom.position.set(0.05, 0.95, 0);
+    santaGroup.add(pom);
+    
+    santaGroup.position.set(-0.3, 0.1, 0);
+    sleighBody.add(santaGroup);
+    
+    // Gift sack in sleigh
+    const sackGeom = new THREE.SphereGeometry(0.25, 8, 8);
+    const sackMat = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.7 });
+    const sack = new THREE.Mesh(sackGeom, sackMat);
+    sack.position.set(0.2, 0.3, 0);
+    sack.scale.set(1, 0.8, 0.8);
+    sleighBody.add(sack);
+    
+    sleighBody.position.set(0, 0, 0);
+    sleighGroup.add(sleighBody);
+    
+    // Reindeer (2 reindeer pulling)
+    function createReindeer() {
+      const reindeer = new THREE.Group();
+      
+      // Body
+      const bodyGeom = new THREE.CapsuleGeometry(0.12, 0.3, 4, 8);
+      const bodyMat = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.6 });
+      const body = new THREE.Mesh(bodyGeom, bodyMat);
+      body.rotation.z = Math.PI / 2;
+      reindeer.add(body);
+      
+      // Head
+      const headGeom = new THREE.SphereGeometry(0.08, 8, 8);
+      const head = new THREE.Mesh(headGeom, bodyMat);
+      head.position.set(0.25, 0.05, 0);
+      reindeer.add(head);
+      
+      // Snout
+      const snoutGeom = new THREE.CylinderGeometry(0.03, 0.04, 0.08, 6);
+      const snout = new THREE.Mesh(snoutGeom, bodyMat);
+      snout.position.set(0.32, 0.02, 0);
+      snout.rotation.z = Math.PI / 2;
+      reindeer.add(snout);
+      
+      // Red nose (Rudolph!)
+      const noseGeom = new THREE.SphereGeometry(0.025, 6, 6);
+      const noseMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+      const nose = new THREE.Mesh(noseGeom, noseMat);
+      nose.position.set(0.37, 0.02, 0);
+      reindeer.add(nose);
+      
+      // Antlers
+      const antlerMat = new THREE.MeshStandardMaterial({ color: 0x4a3728, roughness: 0.7 });
+      const antlerGeom = new THREE.CylinderGeometry(0.01, 0.015, 0.15, 4);
+      
+      const antler1 = new THREE.Mesh(antlerGeom, antlerMat);
+      antler1.position.set(0.22, 0.15, 0.04);
+      antler1.rotation.z = -0.3;
+      antler1.rotation.x = 0.2;
+      reindeer.add(antler1);
+      
+      const antler2 = new THREE.Mesh(antlerGeom, antlerMat);
+      antler2.position.set(0.22, 0.15, -0.04);
+      antler2.rotation.z = -0.3;
+      antler2.rotation.x = -0.2;
+      reindeer.add(antler2);
+      
+      // Legs
+      const legGeom = new THREE.CylinderGeometry(0.02, 0.02, 0.15, 4);
+      const legMat = new THREE.MeshStandardMaterial({ color: 0x6B4423, roughness: 0.6 });
+      
+      const leg1 = new THREE.Mesh(legGeom, legMat);
+      leg1.position.set(0.1, -0.15, 0.06);
+      reindeer.add(leg1);
+      
+      const leg2 = new THREE.Mesh(legGeom, legMat);
+      leg2.position.set(0.1, -0.15, -0.06);
+      reindeer.add(leg2);
+      
+      const leg3 = new THREE.Mesh(legGeom, legMat);
+      leg3.position.set(-0.1, -0.15, 0.06);
+      reindeer.add(leg3);
+      
+      const leg4 = new THREE.Mesh(legGeom, legMat);
+      leg4.position.set(-0.1, -0.15, -0.06);
+      reindeer.add(leg4);
+      
+      return reindeer;
+    }
+    
+    // Create 6 reindeer in V formation
+    const reindeerList = [];
+    
+    const reindeer1 = createReindeer();
+    reindeer1.position.set(2.2, 0, 0);
+    sleighGroup.add(reindeer1);
+    reindeerList.push(reindeer1);
+    
+    const reindeer2 = createReindeer();
+    reindeer2.position.set(1.8, 0, 0.35);
+    sleighGroup.add(reindeer2);
+    reindeerList.push(reindeer2);
+    
+    const reindeer3 = createReindeer();
+    reindeer3.position.set(1.8, 0, -0.35);
+    sleighGroup.add(reindeer3);
+    reindeerList.push(reindeer3);
+    
+    const reindeer4 = createReindeer();
+    reindeer4.position.set(1.4, 0, 0.55);
+    sleighGroup.add(reindeer4);
+    reindeerList.push(reindeer4);
+    
+    const reindeer5 = createReindeer();
+    reindeer5.position.set(1.4, 0, -0.55);
+    sleighGroup.add(reindeer5);
+    reindeerList.push(reindeer5);
+    
+    const reindeer6 = createReindeer();
+    reindeer6.position.set(1.0, 0, 0);
+    sleighGroup.add(reindeer6);
+    reindeerList.push(reindeer6);
+    
+    // Reins (lines connecting reindeer to sleigh)
+    const reinMat = new THREE.LineBasicMaterial({ color: 0x8B4513 });
+    const reinPoints1 = [new THREE.Vector3(0.6, 0.1, 0), new THREE.Vector3(0.9, 0, 0)];
+    const reinGeom1 = new THREE.BufferGeometry().setFromPoints(reinPoints1);
+    const rein1 = new THREE.Line(reinGeom1, reinMat);
+    sleighGroup.add(rein1);
+    
+    // Position sleigh in the sky
+    sleighGroup.position.set(25, 12, -10);
+    sleighGroup.scale.setScalar(1.5);
+    scene.add(sleighGroup);
+    
+    // Sleigh animation variables
+    let sleighAngle = 0;
+
+    // UI
+    const toggleBtn = document.getElementById('toggle-btn');
+    const btnText = document.getElementById('btn-text');
+    const btnIcon = document.getElementById('btn-icon');
+    const greeting = document.getElementById('greeting');
+    const musicBtn = document.getElementById('music-btn');
+    const musicText = document.getElementById('music-text');
+    const musicIcon = document.getElementById('music-icon');
+    const particleSlider = document.getElementById('particle-slider');
+    const particleCountDisplay = document.getElementById('particle-count');
+
+    // Particle slider
+    particleSlider.addEventListener('input', (e) => {
+      COUNT = parseInt(e.target.value);
+      particles.count = COUNT;
+      particleCountDisplay.textContent = COUNT;
+    });
+
+    // Music - Jingle Bells instrumental (local file)
+    const audio = new Audio('Jingle Bells Instrumental.mp3');
+    audio.loop = true;
+    audio.volume = 0.5;
+    let isPlaying = false;
+
+    musicBtn.addEventListener('click', () => {
+      if (isPlaying) {
+        audio.pause();
+        musicText.textContent = 'PLAY MUSIC';
+        musicIcon.innerHTML = '<path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>';
+        musicBtn.classList.remove('border-amber-500/50');
+        musicBtn.classList.add('border-white/20');
+        // Hide greeting and scatter tree
+        greeting.classList.remove('show');
+        isTreeShape = false;
+        btnText.textContent = 'ASSEMBLE TREE';
+        btnText.className = 'text-emerald-100 font-cinematic tracking-widest text-sm';
+        btnIcon.className = 'w-5 h-5 text-emerald-400';
+        toggleBtn.className = toggleBtn.className.replace('border-amber-500/50', 'border-emerald-500/30').replace('shadow-[0_0_30px_-5px_rgba(251,191,36,0.5)]', 'shadow-[0_0_20px_-5px_rgba(16,185,129,0.3)]');
+      } else {
+        audio.play();
+        musicText.textContent = 'PAUSE MUSIC';
+        musicIcon.innerHTML = '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';
+        musicBtn.classList.remove('border-white/20');
+        musicBtn.classList.add('border-amber-500/50');
+        // Show greeting and assemble tree
+        isTreeShape = true;
+        btnText.textContent = 'SCATTER MAGIC';
+        btnText.className = 'text-amber-100 font-cinematic tracking-widest text-sm';
+        btnIcon.className = 'w-5 h-5 text-amber-400';
+        toggleBtn.className = toggleBtn.className.replace('border-emerald-500/30', 'border-amber-500/50').replace('shadow-[0_0_20px_-5px_rgba(16,185,129,0.3)]', 'shadow-[0_0_30px_-5px_rgba(251,191,36,0.5)]');
+        setTimeout(() => greeting.classList.add('show'), 1200);
+      }
+      isPlaying = !isPlaying;
+    });
+
+    toggleBtn.addEventListener('click', () => {
+      isTreeShape = !isTreeShape;
+      if (isTreeShape) {
+        btnText.textContent = 'SCATTER MAGIC';
+        btnText.className = 'text-amber-100 font-cinematic tracking-widest text-sm';
+        btnIcon.className = 'w-5 h-5 text-amber-400';
+        toggleBtn.className = toggleBtn.className.replace('border-emerald-500/30', 'border-amber-500/50').replace('shadow-[0_0_20px_-5px_rgba(16,185,129,0.3)]', 'shadow-[0_0_30px_-5px_rgba(251,191,36,0.5)]');
+        setTimeout(() => greeting.classList.add('show'), 1200);
+      } else {
+        btnText.textContent = 'ASSEMBLE TREE';
+        btnText.className = 'text-emerald-100 font-cinematic tracking-widest text-sm';
+        btnIcon.className = 'w-5 h-5 text-emerald-400';
+        toggleBtn.className = toggleBtn.className.replace('border-amber-500/50', 'border-emerald-500/30').replace('shadow-[0_0_30px_-5px_rgba(251,191,36,0.5)]', 'shadow-[0_0_20px_-5px_rgba(16,185,129,0.3)]');
+        greeting.classList.remove('show');
+      }
+    });
+
+    // Animation
+    const clock = new THREE.Clock();
+    const tempVec = new THREE.Vector3();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const delta = clock.getDelta();
+      const time = clock.getElapsedTime();
+
+      // Blend
+      const targetBlend = isTreeShape ? 1 : 0;
+      blendValue += (targetBlend - blendValue) * delta * 2.5;
+
+      // Main group rotation
+      mainGroup.rotation.y = Math.sin(time * 0.1) * 0.2;
+
+      // Particles
+      for (let i = 0; i < COUNT; i++) {
+        const p = particleData[i];
+        tempVec.lerpVectors(p.scatterPos, p.treePos, blendValue);
+        const floatX = Math.cos(time * p.speed + p.phase) * (1 - blendValue) * 0.5;
+        const floatY = Math.sin(time * p.speed + p.phase) * 0.2;
+        dummy.position.set(tempVec.x + floatX, tempVec.y + floatY, tempVec.z);
+        const rotSpeed = time * p.speed * 0.5 * (1 - blendValue * 0.8);
+        dummy.rotation.set(rotSpeed, rotSpeed, rotSpeed);
+        dummy.scale.setScalar(p.scale);
+        dummy.updateMatrix();
+        particles.setMatrixAt(i, dummy.matrix);
+      }
+      particles.instanceMatrix.needsUpdate = true;
+
+      // Star
+      const targetStarScale = isTreeShape ? 1.2 : 0;
+      const currentStarScale = starGroup.scale.x;
+      const newStarScale = currentStarScale + (targetStarScale - currentStarScale) * delta * 3;
+      starGroup.scale.setScalar(newStarScale);
+      starGroup.rotation.y += delta * 0.5;
+      starGroup.rotation.z = Math.sin(time) * 0.1;
+      
+      // Pulsing glow
+      const pulse = 2.5 + Math.sin(time * 3) * 0.5;
+      starMat.color.setRGB(pulse, pulse * 0.8, 0);
+      glowMat.opacity = 0.3 + Math.sin(time * 2) * 0.15;
+
+      // Snow animation
+      for (let i = 0; i < SNOW_COUNT; i++) {
+        const s = snowData[i];
+        s.t += s.speed * delta * 5;
+        let y = s.y - (s.t % 50) + 25;
+        if (y < -20) y += 50;
+        const x = s.x + Math.sin(s.t * 0.5) * 1.5;
+        const z = s.z + Math.cos(s.t * 0.3) * 1.5;
+        
+        s.rotation += s.rotSpeed * delta;
+        
+        dummy.position.set(x, y, z);
+        dummy.rotation.set(0, 0, s.rotation);
+        dummy.scale.setScalar(s.scale);
+        dummy.updateMatrix();
+        snow.setMatrixAt(i, dummy.matrix);
+      }
+      snow.instanceMatrix.needsUpdate = true;
+
+      // Gift animation - lerp between scatter and tree positions
+      for (let i = 0; i < giftData.length; i++) {
+        const g = giftData[i];
+        const targetPos = isTreeShape ? g.treePos : g.scatterPos;
+        
+        g.group.position.lerp(targetPos, delta * 2);
+        
+        // Floating motion when scattered
+        if (!isTreeShape) {
+          g.group.position.y += Math.sin(time * g.speed + g.phase) * 0.02;
+          g.group.rotation.x = Math.sin(time * g.speed * 0.5 + g.phase) * 0.3;
+          g.group.rotation.z = Math.cos(time * g.speed * 0.5 + g.phase) * 0.3;
+        } else {
+          // Settle rotation when on ground
+          g.group.rotation.x *= 0.95;
+          g.group.rotation.z *= 0.95;
+        }
+      }
+
+      // Santa's sleigh flying animation - fly from right to left with wave motion
+      sleighAngle += delta * 0.15;
+      const sleighX = 30 - sleighAngle * 8;
+      const sleighHeight = 4 + Math.sin(sleighAngle * 3) * 1.5;
+      
+      // Reset position when goes too far left
+      if (sleighX < -30) {
+        sleighAngle = 0;
+      }
+      
+      sleighGroup.position.x = sleighX;
+      sleighGroup.position.z = -6;
+      sleighGroup.position.y = sleighHeight;
+      
+      // Face left direction with slight tilt based on height change
+      sleighGroup.rotation.y = Math.PI;
+      
+      // Tilt based on going up or down
+      const heightDirection = Math.cos(sleighAngle * 3) * 0.15;
+      sleighGroup.rotation.x = heightDirection;
+      sleighGroup.rotation.z = Math.sin(time * 0.8) * 0.03;
+      
+      // Animate all reindeer legs
+      const legBob = Math.sin(time * 6) * 0.2;
+      reindeerList.forEach((reindeer, rIdx) => {
+        reindeer.children.forEach((child, idx) => {
+          if (idx >= 6 && idx <= 9) {
+            child.rotation.x = legBob * (idx % 2 === 0 ? 1 : -1) * (rIdx % 2 === 0 ? 1 : -1);
+          }
+        });
+      });
+
+      controls.update();
+      composer.render();
+    }
+
+    animate();
+
+    // Resize
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      composer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
